@@ -1,0 +1,76 @@
+{
+  "name": "video-model-calculator",
+  "description": "Calculate required resources for Video Diffusion model (DiT/U-Net) training/inference",
+  "version": "1.0.0",
+  "trigger": "/calc-video",
+  "author": "claude-skills",
+  "parameters": {
+    "params": {
+      "type": "string",
+      "required": true,
+      "description": "DiT/U-Net parameter count (e.g., 600M, 3B, 8B)"
+    },
+    "resolution": {
+      "type": "string",
+      "required": true,
+      "description": "Video resolution (e.g., 1080p, 4k, 1920x1080)"
+    },
+    "frames": {
+      "type": "integer",
+      "required": true,
+      "description": "Number of frames to generate"
+    },
+    "fps": {
+      "type": "integer",
+      "required": false,
+      "default": 24,
+      "description": "Frames per second"
+    },
+    "steps": {
+      "type": "integer",
+      "required": false,
+      "default": 30,
+      "description": "Diffusion denoising steps"
+    },
+    "latent_channels": {
+      "type": "integer",
+      "required": false,
+      "default": 16,
+      "description": "VAE latent channels (4 or 16)"
+    },
+    "patch_size": {
+      "type": "integer",
+      "required": false,
+      "default": 2,
+      "description": "DiT patch size"
+    },
+    "precision": {
+      "type": "string",
+      "required": false,
+      "default": "bf16",
+      "enum": ["fp32", "fp16", "bf16"],
+      "description": "Computation precision"
+    },
+    "batch_size": {
+      "type": "integer",
+      "required": false,
+      "default": 1,
+      "description": "Batch size"
+    },
+    "vae_params": {
+      "type": "string",
+      "required": false,
+      "default": "83M",
+      "description": "VAE parameter count"
+    }
+  },
+  "outputs": {
+    "latent_size": "Latent space dimensions (H x W x Frames)",
+    "sequence_length": "Total patches for attention",
+    "flops_per_video": "FLOPs per video generation",
+    "training_vram_gb": "VRAM required for training (GB)",
+    "inference_vram_gb": "VRAM required for inference (GB)",
+    "inference_time_sec": "Inference time per video (seconds, A100)",
+    "gpu_hours_1m_videos": "GPU hours to train on 1M videos"
+  }
+}
