@@ -1,3 +1,8 @@
+---
+name: world-model-calculator
+description: Video Diffusion 모델(DiT/U-Net)의 학습/추론에 필요한 자원량(VRAM, FLOPs, GPU 시간)을 계산합니다.
+---
+
 # Video Model Resource Calculator
 
 Video Diffusion 모델(DiT, U-Net 기반)의 학습/추론에 필요한 자원량을 계산합니다.
