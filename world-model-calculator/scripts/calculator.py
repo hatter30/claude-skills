@@ -122,7 +122,9 @@ def calculate(config: VideoModelConfig) -> dict:
     # hidden_dim ≈ sqrt(N / (12 * num_layers)) for standard transformer
     num_layers = 24
     hidden_dim = int((N / (12 * num_layers)) ** 0.5)
-    activation_per_sample = seq_len * hidden_dim * num_layers * 2  # bytes (with grad checkpointing)
+    activation_per_sample = (
+        seq_len * hidden_dim * num_layers * 2
+    )  # bytes (with grad checkpointing)
 
     # Available VRAM for activations (use 80% of remaining)
     available_for_activation = (vram_gb * 1024**3 - M_model_per_gpu) * 0.8
@@ -166,13 +168,17 @@ def print_results(config: VideoModelConfig, result: dict) -> None:
     print("=" * 60)
 
     print(f"\n[Input]")
-    print(f"  Wall time:           {config.wall_time_hours} hours ({config.wall_time_hours/24:.1f} days)")
+    print(
+        f"  Wall time:           {config.wall_time_hours} hours ({config.wall_time_hours/24:.1f} days)"
+    )
     print(f"  n_gpu:               {config.n_gpu}")
     print(f"  Diffusion steps:     {config.diffusion_steps}")
 
     print(f"\n[Sampling Target]")
     print(f"  Resolution:          {w}x{h}")
-    print(f"  Duration:            {result['video_duration']:.1f}s ({config.frames} frames @ {config.fps}fps)")
+    print(
+        f"  Duration:            {result['video_duration']:.1f}s ({config.frames} frames @ {config.fps}fps)"
+    )
     print(f"  seq_len:             {result['seq_len']:,} patches")
 
     print(f"\n[Hardware]")
@@ -181,13 +187,17 @@ def print_results(config: VideoModelConfig, result: dict) -> None:
     print(f"  GPU-hours:           {result['gpu_hours']:,}")
 
     print(f"\n[Chinchilla Optimal]")
-    print(f"  N_opt:               {format_number(result['N'])} (hidden_dim={result['hidden_dim']:,})")
+    print(
+        f"  N_opt:               {format_number(result['N'])} (hidden_dim={result['hidden_dim']:,})"
+    )
     print(f"  D_opt:               {format_number(result['D_opt'])} patches = 20 * N")
     print(f"  Training data:       {result['total_video_hours']:,.0f} hours of video")
 
     print(f"\n[Memory per GPU]")
     print(f"  Model+Optimizer:     {result['M_model_per_gpu_gb']:.1f} GB (FSDP)")
-    print(f"  Activations:         {result['M_activation_gb']:.1f} GB (batch={result['batch']})")
+    print(
+        f"  Activations:         {result['M_activation_gb']:.1f} GB (batch={result['batch']})"
+    )
     print(f"  Total:               {result['M_total_per_gpu_gb']:.1f} GB")
 
     print(f"\n[Results]")
@@ -202,16 +212,14 @@ def main():
     parser.add_argument(
         "--wall-time", "-t", type=int, required=True, help="Training wall time in hours"
     )
-    parser.add_argument(
-        "--n-gpu", "-n", type=int, required=True, help="Number of GPUs"
-    )
+    parser.add_argument("--n-gpu", "-n", type=int, required=True, help="Number of GPUs")
     parser.add_argument(
         "--resolution", "-r", required=True, help="Resolution (e.g., 1080p, 1920x1080)"
     )
     parser.add_argument(
         "--frames", "-f", type=int, required=True, help="Number of frames"
     )
-    parser.add_argument("--fps", type=int, default=24, help="FPS (default: 24)")
+    parser.add_argument("--fps", type=int, default=10, help="FPS (default: 10)")
     parser.add_argument(
         "--steps", "-s", type=int, default=10, help="Diffusion steps (default: 10)"
     )
