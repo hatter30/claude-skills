@@ -5,49 +5,42 @@ description: Video Diffusion 모델(DiT/U-Net)의 학습/추론에 필요한 자
 
 # Video Model Resource Calculator
 
-Video Diffusion 모델(DiT, U-Net 기반)의 학습/추론에 필요한 자원량을 계산합니다.
+Video Diffusion 모델 학습을 위한 Chinchilla-optimal 설정 계산기
 
 ## 기능
 
-- **Latent Space 계산**: VAE 인코딩 후 잠재 공간 차원
-- **Sequence Length**: DiT 어텐션을 위한 패치 수
-- **Compute (FLOPs)**: 디퓨전 스텝당/비디오당 연산량
-- **VRAM 계산**: 학습/추론 시 필요한 GPU 메모리
-- **GPU 시간 추정**: A100 기준 추론 시간 및 학습 시간
+주어진 학습 시간과 GPU로 최적 설정 계산:
+- **N_opt**: Chinchilla-optimal 모델 크기
+- **D_opt**: 최적 데이터량 (patches)
+- **batch**: VRAM에 맞는 최적 배치 사이즈 (8 & n_gpu의 배수)
+- **cost**: 예상 비용
 
 ## 사용법
 
 ```bash
-# 기본 사용 (1080p, 5초 비디오)
-python scripts/calculator.py --params 3B --resolution 1080p --frames 120
+# 기본 사용
+python scripts/calculator.py -t 40 -n 8 -r 720p -f 50
 
-# 4K 고해상도
-python scripts/calculator.py --params 8B --resolution 4k --frames 240 --steps 50
-
-# 커스텀 해상도
-python scripts/calculator.py --params 600M --resolution 1920x1080 --frames 60 --fps 30
+# 상세 설정
+python scripts/calculator.py -t 40 -n 8 -r 720p -f 50 --fps 10 --mfu 0.4 --gpu-type H100
 
 # JSON 출력
-python scripts/calculator.py --params 3B --resolution 1080p --frames 120 --json
-
-# 도움말
-python scripts/calculator.py --help
+python scripts/calculator.py -t 40 -n 8 -r 720p -f 50 --json
 ```
 
 ## 입력 파라미터
 
 | 파라미터 | 설명 | 기본값 | 예시 |
 |---------|------|-------|------|
-| `--params`, `-p` | DiT/U-Net 파라미터 수 | (필수) | 600M, 3B, 8B |
-| `--resolution`, `-r` | 비디오 해상도 | (필수) | 1080p, 4k, 1920x1080 |
-| `--frames`, `-f` | 프레임 수 | (필수) | 60, 120, 240 |
-| `--fps` | 초당 프레임 | 24 | 24, 30, 60 |
-| `--steps`, `-s` | 디퓨전 스텝 수 | 30 | 20, 30, 50 |
-| `--latent-channels` | VAE 잠재 채널 | 16 | 4, 16 |
-| `--patch-size` | DiT 패치 크기 | 2 | 1, 2, 4 |
-| `--precision` | 연산 정밀도 | bf16 | fp32, fp16, bf16 |
-| `--batch-size`, `-b` | 배치 사이즈 | 1 | 1, 2, 4 |
-| `--vae-params` | VAE 파라미터 수 | 83M | 83M, 200M |
+| `-t, --wall-time` | 학습 시간 (hours) | (필수) | 40, 100, 240 |
+| `-n, --n-gpu` | GPU 개수 | (필수) | 4, 8, 16 |
+| `-r, --resolution` | 비디오 해상도 | (필수) | 720p, 1080p, 4k |
+| `-f, --frames` | 프레임 수 | (필수) | 50, 120, 240 |
+| `--fps` | 초당 프레임 | 24 | 10, 24, 30 |
+| `-s, --steps` | 디퓨전 스텝 수 | 10 | 10, 20, 50 |
+| `--gpu-type` | GPU 종류 | H100 | A100, H100 |
+| `--mfu` | MFU (0.0-1.0) | 0.3 | 0.3, 0.4, 0.5 |
+| `--gpu-price` | $/GPU-hour | 2.0 | 2.0, 3.0 |
 
 ## 해상도 프리셋
 
@@ -59,43 +52,73 @@ python scripts/calculator.py --help
 | `2k` | 2560x1440 |
 | `4k` | 3840x2160 |
 
-## 계산 공식
+## 핵심 공식
 
-### Latent Space
+### Chinchilla Optimal
 ```
-latent_h = height / 8    (VAE spatial downsampling)
-latent_w = width / 8
-latent_frames = frames / 4    (temporal downsampling)
-```
-
-### Sequence Length (DiT)
-```
-seq_len = (latent_h / patch_size) × (latent_w / patch_size) × latent_frames
+gpu_hours = wall_time * n_gpu
+C_budget = gpu_hours * FLOPS * MFU * 3600
+N_opt = sqrt(C_budget / 120 / steps)
+D_opt = 20 * N
 ```
 
-### FLOPs per Diffusion Step
+### 메모리 계산
 ```
-FLOPs = 2 × params × seq_len + 4 × seq_len² × hidden_dim
-        (transformer)          (attention)
-```
-
-### VRAM (Training)
-```
-VRAM = Model Weights + VAE + Optimizer States + Gradients + Activations
+M_model_per_gpu = 16N / n_gpu  (FSDP)
+M_activation = batch * seq_len * hidden_dim * num_layers * 2 bytes
 ```
 
-## 스케일링 특성
+### 배치 사이즈
+```
+batch = (max_batch // 8) * 8      # Tensor Core 최적화
+batch = (batch // n_gpu) * n_gpu  # Data Parallel 균등 분배
+```
 
-- **해상도**: Attention이 O(seq²)로 스케일 → 해상도 2배 = 메모리 4배
-- **프레임 수**: 선형적으로 sequence length 증가
-- **디퓨전 스텝**: 추론 시간에 선형 영향, VRAM에는 영향 없음
-- **모델 크기**: VRAM과 compute 모두 선형 증가
+### Video Diffusion 특화
+```
+seq_len = latent_h * latent_w * latent_frames
+latent_h = height / 8 / patch_size
+latent_w = width / 8 / patch_size
+latent_frames = frames / 4
+hidden_dim = sqrt(N / (12 * num_layers))
+```
 
-## 참고 모델
+## GPU 스펙
 
-| 모델 | 파라미터 | 해상도 | 최대 길이 |
-|-----|---------|--------|----------|
-| Sora (추정) | ~3B | 1080p | 60s |
-| Runway Gen-3 | ~1-3B | 720p-1080p | 10s |
-| Pika | ~1B | 1080p | 4s |
-| Stable Video | 1.5B | 576x1024 | 4s |
+| GPU | BF16 TFLOPS | VRAM |
+|-----|-------------|------|
+| A100 | 312 | 80 GB |
+| H100 | 989 | 80 GB |
+
+## 출력 예시
+
+```
+============================================================
+Video Model Resource Calculator
+============================================================
+
+[Input]
+  Wall time:           40 hours (1.7 days)
+  n_gpu:               8
+  Diffusion steps:     10
+
+[Hardware]
+  GPU:                 8x H100
+  MFU:                 40%
+  GPU-hours:           320
+
+[Chinchilla Optimal]
+  N_opt:               616.3M (hidden_dim=1,462)
+  D_opt:               12.3B patches = 20 * N
+  Training data:       396 hours of video
+
+[Memory per GPU]
+  Model+Optimizer:     1.1 GB (FSDP)
+  Activations:         45.2 GB (batch=16)
+  Total:               46.3 GB
+
+[Results]
+  Batch size:          16
+  Cost:                $640
+============================================================
+```
